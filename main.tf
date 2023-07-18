@@ -1,34 +1,89 @@
-# Configure the Azure provider
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.0.2"
-    }
-  }
-
-  required_version = ">= 1.1.0"
-}
-
-provider "azurerm" {
-  features {}
-
-  subscription_id = "61230797-2385-4403-8a23-553c4a8da920"
-  client_id       = "bd330f5d-22ed-487c-b29d-5d8e88eff76f"
-  tenant_id       = "cfd11325-8f42-48d9-8d1a-dd495c0916ae"
-  client_secret   = "VDa8Q~asta-4OBc~kzb-sWxHjL0rnC4hh~wV2b-2"
-    
-}
-
-resource "azurerm_resource_group" "rg" {
-  name     = "myTFResourceGroup"
-  location = "westus2"
+#create a resource group
+resource "azurerm_resource_group" "webserver" {
+  name = var.resource_group_name
+  location = var.location
 }
 
 # Create a virtual network within the resource group
-resource "azurerm_virtual_network" "panta" {
-  name                = "pantan-network"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  address_space       = ["10.0.0.0/16"]
+resource "azurerm_network_security_group" "allowedports" {
+  name = "allowedports"
+  resource_group_name = azurerm_resource_group.webserver.name
+  location            = azurerm_resource_group.webserver.location
+  
+  security_rule {
+    name = "http"
+    priority = 100
+    direction = "Inbound"
+    access = "Allow"
+    protocol = "Tcp"
+    source_port_range = "*"
+    destination_port_range = "80"
+    source_address_prefix = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name = "https"
+    priority = 200
+    direction = "Inbound"
+    access = "Allow"
+    protocol = "Tcp"
+    source_port_range = "*"
+    destination_port_range = "443"
+    source_address_prefix = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name = "ssh"
+    priority = 300
+    direction = "Inbound"
+    access = "Allow"
+    protocol = "Tcp"
+    source_port_range = "*"
+    destination_port_range = "22"
+    source_address_prefix = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+# Create public ip
+resource "azurerm_public_ip" "webserver_public_ip" {
+  name = "webserver_public_ip"
+  location = var.location
+  resource_group_name = azurerm_resource_group.webserver.name
+  allocation_method = "Dynamic"
+
+  tags = {
+    environment = var.environment
+  }
+
+  depends_on = [azurerm_resource_group.webserver]
+}
+
+# Create network interface
+resource "azurerm_network_interface" "webserver" {
+  name = "nginx-interface"
+  location = azurerm_resource_group.webserver.location
+  resource_group_name = azurerm_resource_group.webserver.name
+
+  ip_configuration {
+    name = "internal"
+    private_ip_address_allocation = "Dynamic"
+    subnet_id = module.network.vnet_subnets[0]
+    public_ip_address_id = azurerm_public_ip.webserver_public_ip.id
+  }
+
+  depends_on = [azurerm_resource_group.webserver]
+}
+
+# Create Linux VM
+resource "azurerm_linux_virtual_machine" "nginx" {
+  size = var.instance_size
+  name = "panta-nginx-webserver"
+  resource_group_name = azurerm_resource_group.webserver.name
+  location = azurerm_resource_group.webserver.location
+  network_interface_ids = [
+    azurerm_network_interface.webserver.id,
+  ]
 }
