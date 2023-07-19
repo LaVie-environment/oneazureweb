@@ -86,4 +86,30 @@ resource "azurerm_linux_virtual_machine" "nginx" {
   network_interface_ids = [
     azurerm_network_interface.webserver.id,
   ]
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer = "0001-com-ubuntu-server-focal"
+    sku = "20_04-lts-gen2"
+    version = "latest"
+
+  }
+
+  # Feel free to modify the credentials
+  computer_name = "nginx"
+  admin_username = "root"
+  admin_password = "admin1234"
+  disable_password_authentication = false
+
+  os_disk {
+    name = "nginxdisk01"
+    caching = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  tags = {
+    environment = var.environment
+  }
+
+  depends_on = [azurerm_resource_group.webserver]
 }
